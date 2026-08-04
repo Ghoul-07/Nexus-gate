@@ -1,0 +1,18 @@
+{
+  "name": "pubsub",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "tsx watch src/index.ts"
+  },
+  "dependencies": {
+    "@Nexus-gate/shared": "file:../shared",
+    "dotenv": "^17.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "typescript": "^7.0.2",
+    "tsx": "^4.23.5"
+  }
+}
