@@ -9,11 +9,13 @@ export const ROUTES: RouteConfig[] = [
   {
     pathPrefix: '/api/users',
     target: 'http://localhost:4001/users',
-    
+ 
   },
+
   {
     pathPrefix: '/api/orders',
     target: 'http://localhost:4002/orders',
+
     
   },
 ];

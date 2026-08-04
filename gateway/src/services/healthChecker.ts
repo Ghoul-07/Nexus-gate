@@ -1,4 +1,3 @@
-import { run } from "node:test";
 import { ROUTES } from "../config.js";
 
 interface ServiceHealth{
