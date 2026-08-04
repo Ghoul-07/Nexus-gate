@@ -1,0 +1,11 @@
+{
+  "name": "@Nexus-gate/shared",
+  "version": "1.0.0",
+  "main": "./eventSchema.ts",
+  "type": "module",
+  "scripts": {},
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": ""
+}
