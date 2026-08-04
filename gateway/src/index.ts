@@ -2,10 +2,12 @@ import express from 'express'
 import type {Response, Request} from 'express'
 import { createProxyMiddleware } from 'http-proxy-middleware'
 import { ROUTES } from './config.js'
+import { telemetryMiddleware } from './middleware/telemetry.js'
 
 const app = express()
 const PORT = process.env.PORT || 3000
 
+app.use(telemetryMiddleware)
 
 app.get('/health', (req:Request,res:Response)=>{
   res.json({
