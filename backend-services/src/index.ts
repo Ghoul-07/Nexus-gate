@@ -11,6 +11,9 @@ orderApp.use(express.json())
 // 1. USER SERVICE (Port 4001)
 // ----------------------------------------------------
 
+userApp.get('/health',(req:Request, res: Response) =>{
+  res.json({status:'UP', service:'User Service'})
+})
 userApp.get('/users', (req:Request, res:Response)=>{
   res.json({
     service:'User Service',
@@ -24,6 +27,10 @@ userApp.get('/users', (req:Request, res:Response)=>{
 // ----------------------------------------------------
 // 2. ORDER SERVICE (Port 4002)
 // ----------------------------------------------------
+
+orderApp.get('/health',(req:Request, res: Response) =>{
+  res.json({status:'UP', service:'Order Service'})
+})
 
 orderApp.get('/orders', (req:Request, res:Response)=>{
   res.json({
