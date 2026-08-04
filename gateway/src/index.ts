@@ -35,6 +35,15 @@ ROUTES.forEach((route) => {
     createProxyMiddleware({
       target: route.target,
       changeOrigin: true,
+      on: {
+        error: (err, req, res) => {
+          console.error(`[Proxy Error] ${req.url}:`, err.message);
+          if ('writeHead' in res) {
+            res.writeHead(502, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Bad Gateway', message: 'Upstream service unavailable' }));
+          }
+        },
+      },
     })
   );
 });

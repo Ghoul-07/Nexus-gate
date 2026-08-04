@@ -1,14 +1,13 @@
 import type {Request, Response, NextFunction} from 'express'
 import { v4 as uuidv4} from 'uuid'
 import type { NexusGatewayEvent } from '@Nexus-gate/shared/eventSchema.ts'
+import { ROUTES } from '../config.js';
 
 // Helper to identify the downstream/upstream target name
 const getServiceName = (path: string): string => {
-  if (path.startsWith('/api/users')) return 'user-service';
-  if (path.startsWith('/api/orders')) return 'order-service';
-  return 'gateway';
+  const match = ROUTES.find(r => path.startsWith(r.pathPrefix))
+  return match ? match.pathPrefix.replace('/api/', '') + '-service' : 'gateway';
 };
-
 
 export const telemetryMiddleware = (req: Request, res:Response, next: NextFunction) =>{
   const startTime = Date.now()
