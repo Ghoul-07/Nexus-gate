@@ -1,7 +1,7 @@
 import { ROUTES } from "../config.js";
 
 interface ServiceHealth{
-  target:string, 
+  target: string, 
   status: 'UP' | 'DOWN',
   lastChecked: string
 }
@@ -23,7 +23,7 @@ async function checkServiceHealth(targetUrl: string): Promise<ServiceHealth> {
       }
     }
   }catch(err){
-    console.log(`service failed to respond`)
+    console.log(`service failed to respond: ${targetUrl}`)
   }
 
   return {
@@ -33,18 +33,22 @@ async function checkServiceHealth(targetUrl: string): Promise<ServiceHealth> {
   }
 }
 
-
 // periodic polling for all registered targets in ROUTES
 
 export function startHealthCheckPoller(intervalMs : number = 10000){
-  const targets = Array.from(new Set(ROUTES.map((r) => r.target)))
+  // flatten all targets accross all routes
+
+  const origins = new Set<string>()
+  ROUTES.forEach(route =>{
+    route.targets.forEach(target => {
+      origins.add(new URL(target).origin)
+    })
+  })
 
   const runChecks = async() =>{
-    for(const target of targets){
-
-      const baseUrl = new URL(target).origin
-      const health = await checkServiceHealth(baseUrl)
-      healthStatusMap.set(baseUrl, health)
+    for(const origin of origins){
+      const health = await checkServiceHealth(origin)
+      healthStatusMap.set(origin, health)
     }
 
     const summary = Array.from(healthStatusMap.entries())
@@ -60,4 +64,15 @@ export function startHealthCheckPoller(intervalMs : number = 10000){
 
 export function getServicesHealth(): Record<string, ServiceHealth>{
   return Object.fromEntries(healthStatusMap)
+}
+
+
+// Used by the load balancer to skip down instances
+
+export function isHealthy(target: string) : boolean{
+  const origin = new URL(target).origin
+  const health = healthStatusMap.get(origin)
+
+  return health? health.status === 'UP' : true
+
 }
