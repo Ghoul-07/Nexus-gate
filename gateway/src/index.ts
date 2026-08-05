@@ -4,6 +4,7 @@ import { createProxyMiddleware } from 'http-proxy-middleware'
 import { ROUTES } from './config.js'
 import { telemetryMiddleware } from './middleware/telemetry.js'
 import { getServicesHealth, startHealthCheckPoller } from './services/healthChecker.js'
+import { getNextTarget } from './services/loadBalancer.js'
 
 const app = express()
 const PORT = process.env.PORT || 3000
@@ -30,17 +31,29 @@ app.get('/health/services', (req: Request, res: Response) => {
 
 // Register Reverse Proxy Middleware for each route defined in config.ts
 ROUTES.forEach((route) => {
+  // resolve target before the proxy runs
+  app.use(route.pathPrefix, (req, res, next) =>{
+    const target = getNextTarget(route)
+    if(!target){
+      return res.status(503).json({
+        error: 'Service Unavailable',
+        message: 'All upstream instances are down'
+      })
+    }
+    ;(req as any).proxyTarget = target
+    next()
+  })
   app.use(
     route.pathPrefix,
     createProxyMiddleware({
-      target: route.target,
       changeOrigin: true,
+      router: (req) => (req as any).proxyTarget,
       on: {
         error: (err, req, res) => {
-          console.error(`[Proxy Error] ${req.url}:`, err.message);
+          console.error(`[Proxy Error] ${req.url}:`, err.message)
           if ('writeHead' in res) {
-            res.writeHead(502, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: 'Bad Gateway', message: 'Upstream service unavailable' }));
+            res.writeHead(502, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({ error: 'Bad Gateway', message: 'Upstream service unavailable' }))
           }
         },
       },
