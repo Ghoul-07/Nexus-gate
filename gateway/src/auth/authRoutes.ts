@@ -3,6 +3,7 @@ import type { Request, Response } from 'express'
 import bcrypt from 'bcrypt'
 import jwt from 'jsonwebtoken'
 import { DEMO_USERS } from './users.js'
+import { JWT_SECRET } from '../config.js'
 
 const authRouter = express.Router()
 
@@ -24,16 +25,15 @@ authRouter.post('/login', async(req: Request, res:Response) =>{
     return res.status(401).json({error:' Unauthorized', message:'Invalid Credentials'})
   }
 
-  const secret = process.env.JWT_SECRET
 
-  if(!secret){
+  if(!JWT_SECRET){
     console.error("JWT_SECRET is not set")
     return res.status(500).json({error:'Internal server error'})
   }
 
   const token = jwt.sign(
     { id: user.id, username: user.username, role:user.role},
-    secret,
+    JWT_SECRET,
     {expiresIn: '15m'}
   )
   res.json({token})

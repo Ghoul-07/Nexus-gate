@@ -2,8 +2,8 @@ import type { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import type { RouteConfig } from '../config.js';
 import type { DemoUser } from '../auth/users.js'
+import { JWT_SECRET } from '../config.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-nexus-gate-key';
 
 export const authMiddleware = (route?: RouteConfig) => {
   return (req: Request, res: Response, next: NextFunction) => {
@@ -20,11 +20,13 @@ export const authMiddleware = (route?: RouteConfig) => {
 
     try {
       // 1. Verify token
+  
       const decoded = jwt.verify(token, JWT_SECRET) as Omit<DemoUser, 'passwordHash'>;
       
       // 2. Attach user payload to request
       req.user = decoded;
 
+      
       // 3. Enforce Role-Based Access Control (RBAC) if route defines allowedRoles
       if (route?.allowedRoles && route.allowedRoles.length > 0) {
         if (!route.allowedRoles.includes(decoded.role)) {
@@ -37,6 +39,7 @@ export const authMiddleware = (route?: RouteConfig) => {
 
       next();
     } catch (err) {
+      console.error("error occured: ", err)
       return res.status(401).json({
         error: 'INVALID_TOKEN',
         message: 'JWT verification failed or token has expired.',

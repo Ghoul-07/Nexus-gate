@@ -3,6 +3,8 @@ import type {Response, Request} from 'express'
 import { createProxyMiddleware } from 'http-proxy-middleware'
 import { ROUTES } from './config.js'
 import { telemetryMiddleware } from './middleware/telemetry.js'
+import { authMiddleware } from './middleware/authMiddleware.js'
+import { rateLimiterMiddleware } from './middleware/rateLimiter.js'
 import { getServicesHealth, startHealthCheckPoller } from './services/healthChecker.js'
 import { getNextTarget } from './services/loadBalancer.js'
 import authRouter from './auth/authRoutes.js'
@@ -32,11 +34,14 @@ app.get('/health/services', (req: Request, res: Response) => {
   })
 })
 
-
 // Register Reverse Proxy Middleware for each route defined in config.ts
 ROUTES.forEach((route) => {
   // resolve target before the proxy runs
-  app.use(route.pathPrefix, (req, res, next) =>{
+  app.use(
+    route.pathPrefix,
+    authMiddleware(route),                   // Verify JWT and roles
+    rateLimiterMiddleware(route),           // Enforce token rate limit
+    (req, res, next) =>{                    // pick healthy instance
     const target = getNextTarget(route)
     if(!target){
       return res.status(503).json({
