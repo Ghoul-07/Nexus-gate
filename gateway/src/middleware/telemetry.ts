@@ -1,7 +1,7 @@
 import type {Request, Response, NextFunction} from 'express'
-import { v4 as uuidv4} from 'uuid'
-import type { NexusGatewayEvent } from '@Nexus-gate/shared/eventSchema.ts'
 import { ROUTES } from '../config.js';
+import { telemetryPublisher } from '../services/telemetryPublisher.js';
+import { CORRELATION_HEADER } from './correlationId.js';
 
 // Helper to identify the downstream/upstream target name
 const getServiceName = (path: string): string => {
@@ -11,33 +11,52 @@ const getServiceName = (path: string): string => {
 
 export const telemetryMiddleware = (req: Request, res:Response, next: NextFunction) =>{
   const startTime = Date.now()
-  const traceId = uuidv4()
+  const traceId = (req as any).correlationId || (req.headers[CORRELATION_HEADER] as string) || 'unknown-trace'
 
-  // Attach traceId to request headers so downstream services/clients can see it
-  req.headers['x-trace-id'] = traceId
+  const route = req.originalUrl || req.path
+  const method = req.method
+  const clientIp = req.ip || req.socket.remoteAddress || 'unknown'
 
-  // Listen for when the response finishes sending to the client
 
+  // 1. emit REQUEST_RECEIVED when the request starts
+  telemetryPublisher.emitRequestReceived({
+    traceId,
+    method,
+    route,
+    clientIp
+  })
+
+  // 2. Emit complete/failed when response finishes
+ 
   res.on('finish', () =>{
     const latencyMs = Date.now() - startTime
+    const statusCode = res.statusCode
+    const upstreamService = (req as any).proxyTarget || getServiceName(route)
 
-    const event : NexusGatewayEvent = {
-      eventId: uuidv4(),
-      timestamp: Date.now(),
-      topic: 'gateway-telemetry',
-      partitionKey: traceId,
-      schemaVersion: 1,
-      eventType: 'REQUEST_COMPLETED',
-      payload:{
-        traceId,
-        method: req.method,
-        route: req.originalUrl,
-        statusCode: res.statusCode,
-        latencyMs,
-        upstreamService: getServiceName(req.originalUrl)
-      }
+    if(statusCode === 429){
+      return 
     }
-    console.log('[Telemetry event]: ', JSON.stringify(event, null, 2))
+
+    if(statusCode >= 400){
+
+      telemetryPublisher.emitRequestFailed({
+        traceId,
+        method,
+        route,
+        errorReason: `Request completed with HTTP ${statusCode}`,
+        statusCode,
+      })
+    }
+    else{
+      telemetryPublisher.emitRequestCompleted({
+        traceId,
+        method,
+        route,
+        statusCode,
+        latencyMs,
+        upstreamService
+      })
+    }  
   })
 
   next()

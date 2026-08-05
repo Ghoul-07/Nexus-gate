@@ -3,9 +3,11 @@ import type {Response, Request} from 'express'
 import { createProxyMiddleware } from 'http-proxy-middleware'
 import { ROUTES } from './config.js'
 import { telemetryMiddleware } from './middleware/telemetry.js'
+import { correlationMiddleware } from './middleware/correlationId.js'
 import { authMiddleware } from './middleware/authMiddleware.js'
 import { rateLimiterMiddleware } from './middleware/rateLimiter.js'
 import { getServicesHealth, startHealthCheckPoller } from './services/healthChecker.js'
+
 import { getNextTarget } from './services/loadBalancer.js'
 import authRouter from './auth/authRoutes.js'
 import 'dotenv/config'
@@ -13,6 +15,7 @@ import 'dotenv/config'
 const app = express()
 const PORT = process.env.PORT || 3000
 
+app.use(correlationMiddleware)
 app.use(telemetryMiddleware)
 app.use('/auth', express.json() ,authRouter)
 
