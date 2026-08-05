@@ -5,11 +5,15 @@ import { ROUTES } from './config.js'
 import { telemetryMiddleware } from './middleware/telemetry.js'
 import { getServicesHealth, startHealthCheckPoller } from './services/healthChecker.js'
 import { getNextTarget } from './services/loadBalancer.js'
+import authRouter from './auth/authRoutes.js'
+import 'dotenv/config'
 
 const app = express()
 const PORT = process.env.PORT || 3000
 
 app.use(telemetryMiddleware)
+app.use('/auth', express.json() ,authRouter)
+
 
 // gateway self-health check
 app.get('/health', (req: Request,res: Response)=>{
