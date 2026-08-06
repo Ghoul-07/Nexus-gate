@@ -1,4 +1,4 @@
-import express from 'express'
+import express, { raw } from 'express'
 import type {Response, Request} from 'express'
 import { createProxyMiddleware } from 'http-proxy-middleware'
 import { ROUTES } from './config.js'
@@ -7,7 +7,7 @@ import { correlationMiddleware } from './middleware/correlationId.js'
 import { authMiddleware } from './middleware/authMiddleware.js'
 import { rateLimiterMiddleware } from './middleware/rateLimiter.js'
 import { getServicesHealth, startHealthCheckPoller } from './services/healthChecker.js'
-import { getNextTarget } from './services/loadBalancer.js'
+import { getNextTarget, trackRequestEnd, trackRequestStart } from './services/loadBalancer.js'
 import { metricsRegistry } from './services/metrics.js'
 import { getCircuitBreaker } from './services/circuitBreaker.js'
 import http from 'http'
@@ -63,6 +63,9 @@ ROUTES.forEach((route) => {
           message: 'All upstream instances are down or circuit breaker tripped'
         })
       }
+      // increment active connections
+      trackRequestStart(target)
+
       ;(req as any).proxyTarget = target
       next()
   })
@@ -74,9 +77,12 @@ ROUTES.forEach((route) => {
       on: {
         // Record success when proxy receives upstream response
         proxyRes: (proxyRes, req) =>{
-          const target = (req as any).proxyTarget
-          if(target){
-            const rawTarget = (req as any).proxyTarget;      // e.g. "http://localhost:4001"
+          const rawTarget = (req as any).proxyTarget         // e.g. "http://localhost:4001"
+          if(rawTarget){
+            
+            // decrement active request count upon response
+            trackRequestEnd(rawTarget)
+
             const targetOrigin = new URL(rawTarget).origin;
             const breaker = getCircuitBreaker(targetOrigin)
             if(proxyRes.statusCode && proxyRes.statusCode >= 500){
@@ -89,10 +95,13 @@ ROUTES.forEach((route) => {
         },
         // record failure on netwrok errors/ timeouts
         error: (err, req, res) => {
-          const target = (req as any).proxyTarget
+          const rawTarget = (req as any).proxyTarget             // e.g. "http://localhost:4001"
           console.error(`[Proxy Error] ${req.url}:`, err.message)
-          if (target) {
-            const rawTarget = (req as any).proxyTarget;    // e.g. "http://localhost:4001"
+          if (rawTarget) {
+            
+            // decrement active request count upon error / timeouts
+            trackRequestEnd(rawTarget)
+
             const targetOrigin = new URL(rawTarget).origin;
             const breaker = getCircuitBreaker(targetOrigin)
             breaker.recordFailure()

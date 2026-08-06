@@ -22,6 +22,13 @@ userApp.get('/users', (req:Request, res:Response)=>{
   })
 })
 
+// Simulate a heavy request that takes 30 seconds to complete
+userApp.get('/users/slow', (req, res) => {
+  setTimeout(() => {
+    res.json({ message: 'Slow response from :4001', port: 4001 });
+  }, 30000);
+});
+
 userApp.listen(PORT, ()=>{
   console.log(`[User Service] running on PORT ${PORT}`)
 })
