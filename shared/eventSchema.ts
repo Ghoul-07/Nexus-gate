@@ -47,7 +47,7 @@ export interface RequestFailedPayload {
 }
 
 export interface CircuitBreakerPayload {
-  route: string;
+  targetUrl: string;
   previousState: 'CLOSED' | 'OPEN' | 'HALF_OPEN';
   newState: 'CLOSED' | 'OPEN' | 'HALF_OPEN';
   reason?: string;

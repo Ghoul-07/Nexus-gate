@@ -10,7 +10,9 @@ userApp.get('/health',(req:Request, res: Response) =>{
   res.json({status:'UP', service:'User Service'})
 })
 userApp.get('/users', (req:Request, res:Response)=>{
+ 
   console.log(`[User Service ${PORT}] handling /users`)
+
   res.json({
     service:'User Service',
     data:[
@@ -20,6 +22,12 @@ userApp.get('/users', (req:Request, res:Response)=>{
   })
 })
 
+// Simulate a heavy request that takes 30 seconds to complete
+userApp.get('/users/slow', (req, res) => {
+  setTimeout(() => {
+    res.json({ message: 'Slow response from :4001', port: 4001 });
+  }, 30000);
+});
 
 userApp.listen(PORT, ()=>{
   console.log(`[User Service] running on PORT ${PORT}`)
