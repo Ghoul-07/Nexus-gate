@@ -27,6 +27,7 @@ function dispatch(event : NexusGatewayEvent): void{
   if(process.env.NODE_ENV !== 'production'){
     console.log(`[Telemetry Event] [${event.eventType}]`, JSON.stringify(event.payload))
   }
+  metricsRegistry.recordEvent(event)
   broadcastWS('TELEMETRY_EVENT',event)
 
   broadcastWS('METRICS_UPDATE', metricsRegistry.getSnapshot())

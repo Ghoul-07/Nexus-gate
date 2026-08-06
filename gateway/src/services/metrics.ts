@@ -7,7 +7,11 @@ class MetricsRegistery{
   private totalLatencyMs = 0;
   private startTime = Date.now()
 
+  private recentEvents: any[] = []
 
+  public recordEvent(event: any){
+    this.recentEvents = [event, ...this.recentEvents].slice(0, 20)
+  }
 /**
  * Called everytime a request completes or fails
  */
@@ -33,6 +37,7 @@ class MetricsRegistery{
     const avgLatencyMs = this.totalRequests > 0 
       ? Number((this.totalLatencyMs / this.totalRequests).toFixed(2))
       : 0
+      
     return {
       upTimeSeconds,
       totalRequests: this.totalRequests,
@@ -41,6 +46,7 @@ class MetricsRegistery{
       requestsByStatus: this.requestsByStatus,
       requestsByRoute: this.requestsByRoute,
       requestsByMethod: this.requestsByMethod,
+      recentEvents: this.recentEvents
     }
   }
 }

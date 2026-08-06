@@ -25,6 +25,10 @@ export function initWebSocketServer(server: Server) : WebSocketServer{
       console.log("Dashboard client disconnected")
     })
   })
+
+  setInterval(() =>{
+    broadcastWS('METRICS_UPDATE', metricsRegistry.getSnapshot())
+  },1000)
   return wss
 }
 
