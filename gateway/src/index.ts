@@ -3,16 +3,21 @@ import type {Response, Request} from 'express'
 import { createProxyMiddleware } from 'http-proxy-middleware'
 import { ROUTES } from './config.js'
 import { telemetryMiddleware } from './middleware/telemetry.js'
+import { correlationMiddleware } from './middleware/correlationId.js'
 import { authMiddleware } from './middleware/authMiddleware.js'
 import { rateLimiterMiddleware } from './middleware/rateLimiter.js'
 import { getServicesHealth, startHealthCheckPoller } from './services/healthChecker.js'
 import { getNextTarget } from './services/loadBalancer.js'
+import { metricsRegistry } from './services/metrics.js'
+import http from 'http'
+import { initWebSocketServer } from './services/websocket.js'
 import authRouter from './auth/authRoutes.js'
 import 'dotenv/config'
 
 const app = express()
 const PORT = process.env.PORT || 3000
 
+app.use(correlationMiddleware)
 app.use(telemetryMiddleware)
 app.use('/auth', express.json() ,authRouter)
 
@@ -32,6 +37,11 @@ app.get('/health/services', (req: Request, res: Response) => {
     timeStamp: new Date().toISOString(),
     services: getServicesHealth()
   })
+})
+
+// Expose internal gateway metrics
+app.get('/metrices', (req: Request, res:Response) =>{
+  res.json(metricsRegistry.getSnapshot())
 })
 
 // Register Reverse Proxy Middleware for each route defined in config.ts
@@ -69,7 +79,13 @@ ROUTES.forEach((route) => {
     })
   );
 });
-app.listen(PORT, ()=>{
-  console.log(`[Nexus-Gate] gateway listening on PORT ${PORT}`)
+
+const server = http.createServer(app)
+
+initWebSocketServer(server)
+
+server.listen(PORT, ()=>{
+  console.log(`[Nexus-Gate] gateway listening on http://localhost:${PORT}`)
+  console.log(`Websockets listening on ws://localhost:${PORT}/ws`)
   startHealthCheckPoller(10000)
 })

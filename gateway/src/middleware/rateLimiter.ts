@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import type { RouteConfig } from '../config.js';
+import { telemetryPublisher } from '../services/telemetryPublisher.js';
 
 interface Bucket {
   tokens: number;
@@ -15,11 +16,11 @@ export const rateLimiterMiddleware = (route: RouteConfig) => {
     const clientId = req.user?.id || req.ip || 'anonymous';
     const bucketKey = `${clientId}:${route.pathPrefix}`;
 
+    const clientIp = req.ip || req.socket.remoteAddress || 'unknown'
     
     const { capacity, refillPerSec } = route.rateLimit;
     const now = Date.now();
 
-    
 
     //  Retrieve existing bucket or initialize a fresh full bucket
     let bucket = buckets.get(bucketKey);
@@ -55,6 +56,12 @@ export const rateLimiterMiddleware = (route: RouteConfig) => {
     res.setHeader('X-RateLimit-Remaining', 0);
     res.setHeader('Retry-After', Math.ceil(1 / refillPerSec));
 
+    telemetryPublisher.emitRateLimitExceeded({
+      route: req.originalUrl || req.path,
+      clientIp,
+      limit: capacity,
+      windowMs: Math.ceil((1 / refillPerSec) * 1000)
+    })
     return res.status(429).json({
       error: 'RATE_LIMIT_EXCEEDED',
       message: `Rate limit exceeded for route '${route.pathPrefix}'. Max capacity is ${capacity} requests with a refill rate of ${refillPerSec}/sec.`,
