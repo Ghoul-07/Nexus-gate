@@ -9,6 +9,8 @@ import { rateLimiterMiddleware } from './middleware/rateLimiter.js'
 import { getServicesHealth, startHealthCheckPoller } from './services/healthChecker.js'
 import { getNextTarget } from './services/loadBalancer.js'
 import { metricsRegistry } from './services/metrics.js'
+import http from 'http'
+import { initWebSocketServer } from './services/websocket.js'
 import authRouter from './auth/authRoutes.js'
 import 'dotenv/config'
 
@@ -78,7 +80,12 @@ ROUTES.forEach((route) => {
   );
 });
 
-app.listen(PORT, ()=>{
-  console.log(`[Nexus-Gate] gateway listening on PORT ${PORT}`)
+const server = http.createServer(app)
+
+initWebSocketServer(server)
+
+server.listen(PORT, ()=>{
+  console.log(`[Nexus-Gate] gateway listening on http://localhost:${PORT}`)
+  console.log(`Websockets listening on ws://localhost:${PORT}/ws`)
   startHealthCheckPoller(10000)
 })

@@ -1,6 +1,6 @@
 import {v4 as uuidv4} from 'uuid'
 import { metricsRegistry } from './metrics.js'
-
+import { broadcastWS } from './websocket.js'
 import type{
   NexusGatewayEvent,
   RequestReceivedPayload,
@@ -27,6 +27,9 @@ function dispatch(event : NexusGatewayEvent): void{
   if(process.env.NODE_ENV !== 'production'){
     console.log(`[Telemetry Event] [${event.eventType}]`, JSON.stringify(event.payload))
   }
+  broadcastWS('TELEMETRY_EVENT',event)
+
+  broadcastWS('METRICS_UPDATE', metricsRegistry.getSnapshot())
 }
 
 export const telemetryPublisher = {
