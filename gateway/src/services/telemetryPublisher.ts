@@ -6,7 +6,8 @@ import type{
   RequestReceivedPayload,
   RequestCompletedPayload,
   RequestFailedPayload,
-  RateLimitExceededPayload
+  RateLimitExceededPayload,
+  CircuitBreakerPayload
 } from '@Nexus-gate/shared'
 
 const TELEMETRY_TOPIC= "gateway-telemetry"
@@ -74,8 +75,17 @@ export const telemetryPublisher = {
       payload
     }
     dispatch(event)
-  }
+  },
+  
+  emitCircuitBreakerStateChange(payload: CircuitBreakerPayload): void{
 
+    const event : NexusGatewayEvent= {
+      ...createBaseEvent(payload.targetUrl),
+      eventType: 'CIRCUIT_BREAKER_STATE_CHANGE',
+      payload
+    }
+    dispatch(event)
+  }
 
 
 }

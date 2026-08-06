@@ -10,7 +10,9 @@ userApp.get('/health',(req:Request, res: Response) =>{
   res.json({status:'UP', service:'User Service'})
 })
 userApp.get('/users', (req:Request, res:Response)=>{
+ 
   console.log(`[User Service ${PORT}] handling /users`)
+
   res.json({
     service:'User Service',
     data:[
@@ -19,7 +21,6 @@ userApp.get('/users', (req:Request, res:Response)=>{
     ]
   })
 })
-
 
 userApp.listen(PORT, ()=>{
   console.log(`[User Service] running on PORT ${PORT}`)
