@@ -7,8 +7,8 @@ import { correlationMiddleware } from './middleware/correlationId.js'
 import { authMiddleware } from './middleware/authMiddleware.js'
 import { rateLimiterMiddleware } from './middleware/rateLimiter.js'
 import { getServicesHealth, startHealthCheckPoller } from './services/healthChecker.js'
-
 import { getNextTarget } from './services/loadBalancer.js'
+import { metricsRegistry } from './services/metrics.js'
 import authRouter from './auth/authRoutes.js'
 import 'dotenv/config'
 
@@ -35,6 +35,11 @@ app.get('/health/services', (req: Request, res: Response) => {
     timeStamp: new Date().toISOString(),
     services: getServicesHealth()
   })
+})
+
+// Expose internal gateway metrics
+app.get('/metrices', (req: Request, res:Response) =>{
+  res.json(metricsRegistry.getSnapshot())
 })
 
 // Register Reverse Proxy Middleware for each route defined in config.ts
@@ -72,6 +77,7 @@ ROUTES.forEach((route) => {
     })
   );
 });
+
 app.listen(PORT, ()=>{
   console.log(`[Nexus-Gate] gateway listening on PORT ${PORT}`)
   startHealthCheckPoller(10000)

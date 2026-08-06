@@ -1,4 +1,5 @@
 import {v4 as uuidv4} from 'uuid'
+import { metricsRegistry } from './metrics.js'
 
 import type{
   NexusGatewayEvent,
@@ -39,6 +40,8 @@ export const telemetryPublisher = {
   },
 
   emitRequestCompleted(payload: RequestCompletedPayload): void{
+    metricsRegistry.recordRequest(payload.method, payload.route, payload.statusCode, payload.latencyMs)
+
     const event: NexusGatewayEvent={
       ...createBaseEvent(payload.traceId),
       eventType:'REQUEST_COMPLETED',
@@ -48,6 +51,8 @@ export const telemetryPublisher = {
   },
 
   emitRequestFailed(payload: RequestFailedPayload): void{
+    metricsRegistry.recordRequest(payload.method, payload.route, payload.statusCode || 500, 0)
+
     const event : NexusGatewayEvent = {
       ...createBaseEvent(payload.traceId),
       eventType:'REQUEST_FAILED',
@@ -57,6 +62,8 @@ export const telemetryPublisher = {
   },
 
   emitRateLimitExceeded(payload: RateLimitExceededPayload) : void{
+    metricsRegistry.recordRequest("UNKNOWN", payload.route, 429, 0)
+
     const event : NexusGatewayEvent = {
       ...createBaseEvent(payload.route),
       eventType: 'RATE_LIMIT_EXCEEDED',
