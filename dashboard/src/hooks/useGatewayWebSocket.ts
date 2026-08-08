@@ -1,64 +1,42 @@
-import { useEffect, useState } from "react";
+import { useState, useEffect } from 'react';
 
-export interface MetricsSnapshot {
-  totalRequests: number;
-  totalErrors: number;
-  avgLatencyMs: number;
-  upTimeSeconds: number;
-  requestsByStatus: Record<number, number>;
-  requestsByRoute: Record<string, number>;
-  requestsByMethod: Record<string, number>;
-}
+export function useGatewayWebSocket() {
+  // State to hold the latest events and metrics
+  const [telemetry, setTelemetry] = useState<any>(null);
+  const [metrics, setMetrics] = useState<any>(null);
 
-export interface TelemetryEvent {
-  eventType: string;
-  payload: Record<string, unknown>;
-  timestamp?: number;
-}
+  useEffect(() => {
+    // Connect directly to the new Pub/Sub broker
+    const ws = new WebSocket('ws://localhost:5000');
 
-export function useGatewayWebSocket(url: string){
-  const [isConnected, setIsConnected] = useState(false)
-  const [metrics, setMetrics] = useState<MetricsSnapshot | null >(null)
-  const [events, setEvents] = useState<TelemetryEvent[]>([])
+    ws.onopen = () => {
+      console.log('🟢 Connected to Pub/Sub Broker');
+    };
 
-  useEffect(()=>{
-    const ws = new WebSocket(url)
-
-    ws.onopen = () =>{
-      console.log("Dashboard connected to Gateway WS")
-      setIsConnected(true)
-    }
-
-    ws.onclose = () =>{
-      console.log("Dashboard disconnected from Gateway WS")
-      setIsConnected(false)
-    }
-
-    ws.onmessage = (event) =>{
-      try{
-        const message = JSON.parse(event.data)
-
-        if(message.type === 'METRICS_SNAPSHOT'){
-          setMetrics(message.data)
-          if(message.data.recentEvents){
-            setEvents(message.data.recentEvents)
-          }
+    ws.onmessage = (event) => {
+      try {
+        const parsed = JSON.parse(event.data);
+        
+        // Route the incoming data to the correct state variable
+        if (parsed.type === 'TELEMETRY_EVENT') {
+          setTelemetry(parsed.data);
+        } else if (parsed.type === 'METRICS_UPDATE') {
+          setMetrics(parsed.data);
         }
-        if(message.type === 'METRICS_UPDATE'){
-          setMetrics(message.data)
-        }
-        if(message.type === 'TELEMETRY_EVENT'){
-          setEvents((prev) => [message.data, ...prev.slice(0, 49)])                // keep last 50 events
-        }
-      }catch(err){
-        console.error('Failed to parse WS message', err)
+      } catch (err) {
+        console.error('⚠️ Failed to parse WebSocket message', err);
       }
-    }
+    };
 
-    return () =>{
-      ws.close()
-    }
-  },[url])
+    ws.onclose = () => {
+      console.log('🔴 Disconnected from Pub/Sub Broker');
+    };
 
-  return {isConnected, metrics, events}
+    // Cleanup the connection when the component unmounts
+    return () => {
+      ws.close();
+    };
+  }, []);
+
+  return { telemetry, metrics };
 }

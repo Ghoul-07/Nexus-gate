@@ -11,7 +11,6 @@ import { getNextTarget, trackRequestEnd, trackRequestStart } from './services/lo
 import { metricsRegistry } from './services/metrics.js'
 import { getCircuitBreaker } from './services/circuitBreaker.js'
 import http from 'http'
-import { initWebSocketServer } from './services/websocket.js'
 import authRouter from './auth/authRoutes.js'
 import 'dotenv/config'
 
@@ -77,7 +76,7 @@ ROUTES.forEach((route) => {
       on: {
         // Record success when proxy receives upstream response
         proxyRes: (proxyRes, req) =>{
-          const rawTarget = (req as any).proxyTarget         // e.g. "http://localhost:4001"
+          const rawTarget = (req as any).proxyTarget        // e.g. "http://localhost:4001"
           if(rawTarget){
             
             // decrement active request count upon response
@@ -119,10 +118,7 @@ ROUTES.forEach((route) => {
 
 const server = http.createServer(app)
 
-initWebSocketServer(server)
-
 server.listen(PORT, ()=>{
   console.log(`[Nexus-Gate] gateway listening on http://localhost:${PORT}`)
-  console.log(`Websockets listening on ws://localhost:${PORT}/ws`)
   startHealthCheckPoller(10000)
 })

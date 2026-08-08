@@ -1,91 +1,122 @@
-import {v4 as uuidv4} from 'uuid'
-import { metricsRegistry } from './metrics.js'
-import { broadcastWS } from './websocket.js'
-import type{
+import { createClient } from 'redis';
+import { v4 as uuidv4 } from 'uuid';
+import { metricsRegistry } from './metrics.js';
+import type {
   NexusGatewayEvent,
   RequestReceivedPayload,
   RequestCompletedPayload,
   RequestFailedPayload,
   RateLimitExceededPayload,
   CircuitBreakerPayload
-} from '@Nexus-gate/shared'
+} from '@Nexus-gate/shared';
 
-const TELEMETRY_TOPIC= "gateway-telemetry"
-const SCHEMA_VERSION = 1
+const TELEMETRY_TOPIC = "gateway-telemetry";
+const SCHEMA_VERSION = 1;
 
+// 1. Initialize Redis Client (with Upstash TLS fix)
+const redisClient = createClient({
+  url: process.env.REDIS_URL,
+  socket: {
+    tls: true,
+    rejectUnauthorized: false // Bypasses the local Windows SSL block
+  }
+});
 
-function createBaseEvent(partitionKey: string){
+redisClient.on('error', (err) => console.error('[Redis Error] Gateway Publisher:', err));
+redisClient.on('connect', () => console.log('[Redis] Gateway Publisher connected to broker 🚀'));
+
+// Connect asynchronously
+redisClient.connect().catch(console.error);
+
+function createBaseEvent(partitionKey: string) {
   return {
     eventId: uuidv4(),
     timestamp: Date.now(),
     topic: TELEMETRY_TOPIC,
     partitionKey,
     schemaVersion: SCHEMA_VERSION
-  }
+  };
 }
 
-function dispatch(event : NexusGatewayEvent): void{
-  if(process.env.NODE_ENV !== 'production'){
-    console.log(`[Telemetry Event] [${event.eventType}]`, JSON.stringify(event.payload))
+// 2. Updated Dispatch Function (No more HTTP fetch)
+function dispatch(event: NexusGatewayEvent): void {
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`[Telemetry Event] [${event.eventType}]`, JSON.stringify(event.payload));
   }
-  metricsRegistry.recordEvent(event)
-  broadcastWS('TELEMETRY_EVENT',event)
+  
+  // TRACER BULLET 1: Right before it leaves the Gateway
+  console.log(`\n🚀 [Step 1: Gateway] Routing ${event.eventType} event. Firing up to Redis...`);
+  
+  metricsRegistry.recordEvent(event);
 
-  broadcastWS('METRICS_UPDATE', metricsRegistry.getSnapshot())
+  // Send the telemetry event to Redis (matches your original payload structure)
+  redisClient.publish(TELEMETRY_TOPIC, JSON.stringify({ type: 'TELEMETRY_EVENT', data: event }))
+    .then(() => {
+      // TRACER BULLET 2: Proof that Upstash actually received it
+      console.log(`✅ [Step 2: Gateway] Successfully published ${event.eventType} to Upstash Cloud!`);
+    })
+    .catch(err => {
+      console.error('⚠️ Gateway failed to publish event to Redis broker:', err.message);
+    });
+
+  // Send the updated metrics snapshot to a separate Redis channel
+  redisClient.publish('gateway-metrics', JSON.stringify({ type: 'METRICS_UPDATE', data: metricsRegistry.getSnapshot() }))
+    .catch(err => {
+      console.error('⚠️ Gateway failed to publish metrics to Redis broker:', err.message);
+    });
 }
 
+
+// 3. Your original publisher methods remain perfectly intact
 export const telemetryPublisher = {
   emitRequestReceived(payload: RequestReceivedPayload): void {
     const event: NexusGatewayEvent = {
       ...createBaseEvent(payload.traceId),
       eventType: 'REQUEST_RECEIVED',
       payload
-    }
-    dispatch(event)
+    };
+    dispatch(event);
   },
 
-  emitRequestCompleted(payload: RequestCompletedPayload): void{
-    metricsRegistry.recordRequest(payload.method, payload.route, payload.statusCode, payload.latencyMs)
+  emitRequestCompleted(payload: RequestCompletedPayload): void {
+    metricsRegistry.recordRequest(payload.method, payload.route, payload.statusCode, payload.latencyMs);
 
-    const event: NexusGatewayEvent={
+    const event: NexusGatewayEvent = {
       ...createBaseEvent(payload.traceId),
-      eventType:'REQUEST_COMPLETED',
+      eventType: 'REQUEST_COMPLETED',
       payload
-    }
-    dispatch(event)
+    };
+    dispatch(event);
   },
 
-  emitRequestFailed(payload: RequestFailedPayload): void{
-    metricsRegistry.recordRequest(payload.method, payload.route, payload.statusCode || 500, 0)
+  emitRequestFailed(payload: RequestFailedPayload): void {
+    metricsRegistry.recordRequest(payload.method, payload.route, payload.statusCode || 500, 0);
 
-    const event : NexusGatewayEvent = {
+    const event: NexusGatewayEvent = {
       ...createBaseEvent(payload.traceId),
-      eventType:'REQUEST_FAILED',
+      eventType: 'REQUEST_FAILED',
       payload
-    }
-    dispatch(event)
+    };
+    dispatch(event);
   },
 
-  emitRateLimitExceeded(payload: RateLimitExceededPayload) : void{
-    metricsRegistry.recordRequest("UNKNOWN", payload.route, 429, 0)
+  emitRateLimitExceeded(payload: RateLimitExceededPayload): void {
+    metricsRegistry.recordRequest("UNKNOWN", payload.route, 429, 0);
 
-    const event : NexusGatewayEvent = {
+    const event: NexusGatewayEvent = {
       ...createBaseEvent(payload.route),
       eventType: 'RATE_LIMIT_EXCEEDED',
       payload
-    }
-    dispatch(event)
+    };
+    dispatch(event);
   },
   
-  emitCircuitBreakerStateChange(payload: CircuitBreakerPayload): void{
-
-    const event : NexusGatewayEvent= {
+  emitCircuitBreakerStateChange(payload: CircuitBreakerPayload): void {
+    const event: NexusGatewayEvent = {
       ...createBaseEvent(payload.targetUrl),
       eventType: 'CIRCUIT_BREAKER_STATE_CHANGE',
       payload
-    }
-    dispatch(event)
+    };
+    dispatch(event);
   }
-
-
-}
+};
