@@ -1,0 +1,11 @@
+{
+  "name": "nexus-gate",
+  "private": true,
+  "workspaces": [
+    "backend-services",
+    "dashboard",
+    "gateway",
+    "pubsub",
+    "shared"
+  ]
+}
