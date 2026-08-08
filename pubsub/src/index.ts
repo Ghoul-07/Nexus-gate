@@ -1,48 +1,61 @@
-import express from 'express';
 import { WebSocketServer, WebSocket } from 'ws';
-import http from 'http';
-import dotenv from 'dotenv';
+import { createClient } from 'redis';
+import 'dotenv/config';
 
-dotenv.config();
+const PORT = process.env.PORT ? parseInt(process.env.PORT) : 5000;
+const REDIS_URL = process.env.REDIS_URL;
 
-const app = express();
-const server = http.createServer(app);
+if (!REDIS_URL) {
+  console.error("❌ CRITICAL: REDIS_URL is missing from pubsub/.env");
+  process.exit(1);
+}
 
-// Initialize the WebSocket server
-const wss = new WebSocketServer({ server });
-
-app.use(express.json());
-
-// Track connected clients
-const clients = new Set<WebSocket>();
+// 1. Initialize WebSocket Server for the React Dashboard
+const wss = new WebSocketServer({ port: PORT });
 
 wss.on('connection', (ws) => {
-  console.log('🔌 New React Dashboard client connected to Pub/Sub');
-  clients.add(ws);
-
-  ws.on('close', () => {
-    clients.delete(ws);
-    console.log('❌ Client disconnected');
-  });
+  console.log('[WebSocket] React Control Plane connected');
+  ws.send(JSON.stringify({ status: 'connected', message: 'Nexus-Gate Telemetry Stream Active' }));
 });
 
-// The Gateway will POST telemetry events here
-app.post('/publish', (req, res) => {
-  const eventPayload = req.body;
-
-  // Broadcast the event to all connected UI clients
-  const message = JSON.stringify(eventPayload);
-  clients.forEach((client) => {
+// Broadcast helper function
+const broadcastToDashboard = (data: any) => {
+  const payload = JSON.stringify(data);
+  wss.clients.forEach((client) => {
     if (client.readyState === WebSocket.OPEN) {
-      client.send(message);
+      client.send(payload);
     }
   });
+};
 
-  res.status(200).send({ status: 'Event broadcasted' });
+// 2. Initialize Redis Subscriber
+const redisSubscriber = createClient({ 
+  url: REDIS_URL,
+  socket: {
+    tls: true,
+    rejectUnauthorized: false
+  }
 });
 
-const PORT = process.env.PUBSUB_PORT || 5000;
+redisSubscriber.on('error', (err) => console.error('[Redis Error] Subscriber:', err));
+redisSubscriber.on('connect', () => console.log('[Redis] Pub/Sub Subscriber connected to Upstash Cloud ☁️'));
 
-server.listen(PORT, () => {
-  console.log(`🚀 Pub/Sub Message Broker running on port ${PORT}`);
-});
+const bootBroker = async () => {
+  await redisSubscriber.connect();
+
+  // 3. Subscribe to Gateway Telemetry Events
+  await redisSubscriber.subscribe('gateway-telemetry', (message) => {
+    const eventData = JSON.parse(message);
+    broadcastToDashboard(eventData);
+  });
+
+  // 4. Subscribe to Gateway Metrics Updates
+  await redisSubscriber.subscribe('gateway-metrics', (message) => {
+    const metricsData = JSON.parse(message);
+    broadcastToDashboard({ type: 'METRICS_UPDATE', ...metricsData });
+  });
+
+  console.log(`[Nexus-PubSub] WebSocket relay actively listening on ws://localhost:${PORT}`);
+};
+
+bootBroker().catch(console.error);

@@ -1,3 +1,4 @@
+import { createClient } from 'redis';
 import { v4 as uuidv4 } from 'uuid';
 import { metricsRegistry } from './metrics.js';
 import type {
@@ -12,8 +13,20 @@ import type {
 const TELEMETRY_TOPIC = "gateway-telemetry";
 const SCHEMA_VERSION = 1;
 
-// Define the target endpoint for your new Pub/Sub broker
-const PUBSUB_BROKER_URL = process.env.PUBSUB_URL || 'http://localhost:5000/publish';
+// 1. Initialize Redis Client (with Upstash TLS fix)
+const redisClient = createClient({
+  url: process.env.REDIS_URL,
+  socket: {
+    tls: true,
+    rejectUnauthorized: false // Bypasses the local Windows SSL block
+  }
+});
+
+redisClient.on('error', (err) => console.error('[Redis Error] Gateway Publisher:', err));
+redisClient.on('connect', () => console.log('[Redis] Gateway Publisher connected to broker 🚀'));
+
+// Connect asynchronously
+redisClient.connect().catch(console.error);
 
 function createBaseEvent(partitionKey: string) {
   return {
@@ -25,33 +38,36 @@ function createBaseEvent(partitionKey: string) {
   };
 }
 
+// 2. Updated Dispatch Function (No more HTTP fetch)
 function dispatch(event: NexusGatewayEvent): void {
   if (process.env.NODE_ENV !== 'production') {
     console.log(`[Telemetry Event] [${event.eventType}]`, JSON.stringify(event.payload));
   }
   
+  // TRACER BULLET 1: Right before it leaves the Gateway
+  console.log(`\n🚀 [Step 1: Gateway] Routing ${event.eventType} event. Firing up to Redis...`);
+  
   metricsRegistry.recordEvent(event);
 
-  // 1. Send the telemetry event to the Pub/Sub broker
-  fetch(PUBSUB_BROKER_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ type: 'TELEMETRY_EVENT', data: event })
-  }).catch(err => {
-    // Fail silently: Do not crash the gateway if the broker is down
-    console.error('⚠️ Gateway failed to publish event to Pub/Sub broker:', err.message);
-  });
+  // Send the telemetry event to Redis (matches your original payload structure)
+  redisClient.publish(TELEMETRY_TOPIC, JSON.stringify({ type: 'TELEMETRY_EVENT', data: event }))
+    .then(() => {
+      // TRACER BULLET 2: Proof that Upstash actually received it
+      console.log(`✅ [Step 2: Gateway] Successfully published ${event.eventType} to Upstash Cloud!`);
+    })
+    .catch(err => {
+      console.error('⚠️ Gateway failed to publish event to Redis broker:', err.message);
+    });
 
-  // 2. Send the updated metrics snapshot to the Pub/Sub broker
-  fetch(PUBSUB_BROKER_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ type: 'METRICS_UPDATE', data: metricsRegistry.getSnapshot() })
-  }).catch(err => {
-    console.error('⚠️ Gateway failed to publish metrics to Pub/Sub broker:', err.message);
-  });
+  // Send the updated metrics snapshot to a separate Redis channel
+  redisClient.publish('gateway-metrics', JSON.stringify({ type: 'METRICS_UPDATE', data: metricsRegistry.getSnapshot() }))
+    .catch(err => {
+      console.error('⚠️ Gateway failed to publish metrics to Redis broker:', err.message);
+    });
 }
 
+
+// 3. Your original publisher methods remain perfectly intact
 export const telemetryPublisher = {
   emitRequestReceived(payload: RequestReceivedPayload): void {
     const event: NexusGatewayEvent = {
