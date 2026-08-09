@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-const GATEWAY_URL = 'http://localhost:3000';
+const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL
 
 const STYLES = `
 .ccp-title {

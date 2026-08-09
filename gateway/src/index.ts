@@ -119,6 +119,6 @@ ROUTES.forEach((route) => {
 const server = http.createServer(app)
 
 server.listen(PORT, ()=>{
-  console.log(`[Nexus-Gate] gateway listening on http://localhost:${PORT}`)
+  console.log(`[Nexus-Gate] gateway listening on PORT:${PORT}`)
   startHealthCheckPoller(10000)
 })

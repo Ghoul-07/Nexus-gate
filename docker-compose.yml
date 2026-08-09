@@ -1,0 +1,56 @@
+
+services:
+  # 1. Upstream Microservices
+  backend-services:
+    build:
+      context: .
+      dockerfile: backend-services/Dockerfile
+    ports:
+      - "4001:4001"
+      - "4002:4002"
+      - "4003:4003"
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+
+  # 2. API Gateway
+  gateway:
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - REDIS_URL=${REDIS_URL}
+      - NODE_ENV=${NODE_ENV:-production}
+      - USER1_TARGET=http://backend-services:4001
+      - USER2_TARGET=http://backend-services:4003
+      - ORDER_TARGET=http://backend-services:4002
+      - JWT_SECRET=${JWT_SECRET}
+    depends_on:
+      - backend-services
+
+  # 3. Pub/Sub Broker Relay
+  pubsub:
+    build:
+      context: .
+      dockerfile: pubsub/Dockerfile
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - REDIS_URL=${REDIS_URL}
+      - NODE_ENV=${NODE_ENV:-production}
+
+  # 4. React Dashboard UI
+  dashboard:
+    build:
+      context: .
+      dockerfile: dashboard/Dockerfile
+      args:
+        - VITE_GATEWAY_URL=${VITE_GATEWAY_URL:-http://localhost:3000}
+        - VITE_PUBSUB_WS_URL=${VITE_PUBSUB_WS_URL:-ws://localhost:5000}
+    ports:
+      - "5173:5173"
+    depends_on:
+      - pubsub

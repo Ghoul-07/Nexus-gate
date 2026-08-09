@@ -37,8 +37,10 @@ export function useGatewayWebSocket() {
   });
   const [instances, setInstances] = useState<Record<string, InstanceState>>(INITIAL_INSTANCES);
 
+  const PUBSUB_WS_URL = import.meta.env.VITE_PUBSUB_WS_URL
+
   useEffect(() => {
-    const ws = new WebSocket('ws://localhost:5000');
+    const ws = new WebSocket(PUBSUB_WS_URL);
 
     ws.onopen = () => {
       console.log('🟢 Dashboard connected to Pub/Sub Broker');

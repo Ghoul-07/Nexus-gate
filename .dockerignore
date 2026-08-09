@@ -1,0 +1,21 @@
+# Dependencies (let Docker RUN npm ci install them)
+**/node_modules
+
+# Build outputs & caches
+**/dist
+**/build
+**/.vite
+**/.cache
+
+# Environment variables & secrets
+.env
+*.env
+.git
+.gitignore
+
+# Logs and OS noise
+*.log
+npm-debug.log*
+.DS_Store
+.vscode
+.idea
