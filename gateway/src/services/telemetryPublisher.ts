@@ -13,7 +13,7 @@ import type {
 const TELEMETRY_TOPIC = "gateway-telemetry";
 const SCHEMA_VERSION = 1;
 
-// 1. Initialize Redis Client (with Upstash TLS fix)
+// 1. Initialize Redis Client
 const redisClient = createClient({
   url: process.env.REDIS_URL,
   socket: {
@@ -38,7 +38,7 @@ function createBaseEvent(partitionKey: string) {
   };
 }
 
-// 2. Updated Dispatch Function (No more HTTP fetch)
+// 2. Updated Dispatch Function 
 function dispatch(event: NexusGatewayEvent): void {
   if (process.env.NODE_ENV !== 'production') {
     console.log(`[Telemetry Event] [${event.eventType}]`, JSON.stringify(event.payload));
@@ -49,10 +49,10 @@ function dispatch(event: NexusGatewayEvent): void {
   
   metricsRegistry.recordEvent(event);
 
-  // Send the telemetry event to Redis (matches your original payload structure)
+  // Send the telemetry event to Redis
   redisClient.publish(TELEMETRY_TOPIC, JSON.stringify({ type: 'TELEMETRY_EVENT', data: event }))
     .then(() => {
-      // TRACER BULLET 2: Proof that Upstash actually received it
+      
       console.log(`✅ [Step 2: Gateway] Successfully published ${event.eventType} to Upstash Cloud!`);
     })
     .catch(err => {
@@ -66,8 +66,6 @@ function dispatch(event: NexusGatewayEvent): void {
     });
 }
 
-
-// 3. Your original publisher methods remain perfectly intact
 export const telemetryPublisher = {
   emitRequestReceived(payload: RequestReceivedPayload): void {
     const event: NexusGatewayEvent = {

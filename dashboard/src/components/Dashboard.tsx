@@ -3,6 +3,14 @@ import { useGatewayWebSocket } from '../hooks/useGatewayWebSocket';
 import { LiveInstanceCard } from './LiveInstanceCard';
 import { ChaosControlPanel } from './ChaosControlPanel';
 
+const EVENT_STYLES: Record<string, { color: string; bg: string }> = {
+  REQUEST_RECEIVED: { color: '#60A5FA', bg: 'rgba(96, 165, 250, 0.15)' },
+  REQUEST_COMPLETED: { color: '#4ADE80', bg: 'rgba(74, 222, 128, 0.15)' },
+  REQUEST_FAILED: { color: '#F87171', bg: 'rgba(248, 113, 113, 0.15)' },
+  RATE_LIMIT_EXCEEDED: { color: '#FBBF24', bg: 'rgba(251, 191, 36, 0.15)' },
+  CIRCUIT_BREAKER_STATE_CHANGE: { color: '#A855F7', bg: 'rgba(168, 85, 247, 0.15)' },
+};
+
 const STYLES = `
 @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
@@ -28,7 +36,7 @@ const STYLES = `
 
 .ng-hero {
   position: relative;
-  height: clamp(360px, 42vw, 480px);
+  height: clamp(340px, 38vw, 440px);
   overflow: hidden;
   border-bottom: 1px solid #2B2C1F;
 }
@@ -51,7 +59,7 @@ const STYLES = `
   justify-content: center;
   padding: 0 24px;
 }
-.ng-clock {
+.ng-status-badge {
   position: absolute;
   top: 24px;
   right: 24px;
@@ -62,9 +70,12 @@ const STYLES = `
   background: rgba(10,11,8,0.7);
   border-radius: 4px;
   padding: 8px 14px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
 }
-.ng-clock-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.2em; color: #8C8874; }
-.ng-clock-value { font-size: 17px; color: #FFB300; letter-spacing: 0.1em; }
+.ng-status-badge.online { color: #4ADE80; border-color: rgba(74, 222, 128, 0.3); }
+.ng-status-badge.offline { color: #F87171; border-color: rgba(248, 113, 113, 0.3); }
 
 .ng-eyebrow { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
 .ng-dot { position: relative; width: 8px; height: 8px; }
@@ -119,8 +130,27 @@ const STYLES = `
 .ng-subtitle { font-size: 14px; color: #A8A38E; letter-spacing: 0.02em; margin: 16px 0 0; max-width: 560px; }
 
 .ng-body { position: relative; z-index: 1; max-width: 1200px; margin: 0 auto; padding: 32px 24px; }
+
+/* Metrics Bar */
+.ng-metrics-bar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 28px;
+}
+.ng-metric-card {
+  position: relative;
+  background: #15160F;
+  border: 1px solid #2B2C1F;
+  border-radius: 6px;
+  padding: 16px;
+}
+.ng-metric-title { font-size: 10px; color: #8C8874; text-transform: uppercase; letter-spacing: 0.15em; margin: 0 0 6px; }
+.ng-metric-value { font-size: 22px; font-weight: 700; color: #FFB300; margin: 0; }
+.ng-metric-value.error { color: #F87171; }
+
 .ng-layout { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; }
-.ng-col-side { flex: 1 1 320px; min-width: 300px; display: flex; flex-direction: column; gap: 24px; }
+.ng-col-side { flex: 1 1 360px; min-width: 320px; display: flex; flex-direction: column; gap: 24px; }
 .ng-col-main { flex: 2 1 480px; min-width: 320px; }
 
 .ng-panel { position: relative; background: #15160F; border: 1px solid #2B2C1F; border-radius: 8px; padding: 24px; }
@@ -130,15 +160,27 @@ const STYLES = `
 .ng-panel-title {
   font-size: 11px; color: #8C8874; font-weight: 600;
   text-transform: uppercase; letter-spacing: 0.2em;
-  display: flex; align-items: center; gap: 8px; margin: 0 0 12px;
+  display: flex; align-items: center; gap: 8px; margin: 0 0 14px;
 }
 .ng-panel-title-dot { width: 6px; height: 6px; border-radius: 50%; background: #FFB300; animation: ng-pulse 2s ease-in-out infinite; }
 
-.ng-log {
+.ng-log-stream {
   background: #0A0B08; border: 1px solid #2B2C1F; border-radius: 6px;
-  padding: 14px; height: 224px; overflow-y: auto; font-size: 11px;
+  padding: 12px; height: 320px; overflow-y: auto; display: flex;
+  flex-direction: column; gap: 10px;
 }
-.ng-log pre { color: rgba(255,179,0,0.8); white-space: pre-wrap; word-break: break-word; line-height: 1.6; margin: 0; }
+.ng-log-item {
+  border: 1px solid #1E2015; background: #12130C; border-radius: 4px;
+  padding: 10px; font-size: 11px; display: flex; flex-direction: column; gap: 6px;
+}
+.ng-log-header { display: flex; align-items: center; justify-content: space-between; }
+.ng-event-pill {
+  font-size: 9px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.1em; padding: 3px 6px; border-radius: 3px;
+}
+.ng-log-time { font-size: 10px; color: #6B6858; }
+.ng-log-body { font-size: 11px; color: #ECE7D8; word-break: break-all; }
+.ng-log-payload { font-size: 10px; color: #8C8874; background: #0A0B08; padding: 6px; border-radius: 3px; margin-top: 4px; white-space: pre-wrap; }
 
 .ng-section-head { display: flex; align-items: center; justify-content: space-between; padding: 0 4px; margin-bottom: 16px; }
 .ng-section-title { font-family: 'Oswald', sans-serif; font-size: 14px; color: #F3EEDD; text-transform: uppercase; letter-spacing: 0.15em; margin: 0; }
@@ -147,8 +189,6 @@ const STYLES = `
 .ng-mesh-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; }
 .ng-mesh-card { position: relative; background: #15160F; border: 1px solid #2B2C1F; border-radius: 8px; transition: border-color 0.2s ease; }
 .ng-mesh-card:hover { border-color: #4A4526; }
-.ng-empty { grid-column: 1 / -1; text-align: center; padding: 80px 0; background: #15160F; border: 1px solid #2B2C1F; border-radius: 8px; }
-.ng-empty p { font-size: 12px; color: #8C8874; text-transform: uppercase; letter-spacing: 0.2em; animation: ng-pulse 2s ease-in-out infinite; margin: 0; }
 
 @keyframes ng-ping { 75%, 100% { transform: scale(2); opacity: 0; } }
 @keyframes ng-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
@@ -217,34 +257,8 @@ const HeroCircuit: React.FC = () => {
       });
     }
 
-    const chips = [
-      { x: 0.86, y: 0.24, w: 46, h: 30 },
-      { x: 0.9, y: 0.68, w: 34, h: 34 },
-    ];
-
-    const drawChip = (cx: number, cy: number, w: number, h: number) => {
-      const x = cx - w / 2;
-      const y = cy - h / 2;
-      ctx.strokeStyle = 'rgba(255, 179, 0, 0.18)';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(x, y, w, h);
-      const pins = 4;
-      for (let i = 0; i < pins; i++) {
-        const py = y + (h / (pins + 1)) * (i + 1);
-        ctx.beginPath();
-        ctx.moveTo(x - 6, py);
-        ctx.lineTo(x, py);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(x + w, py);
-        ctx.lineTo(x + w + 6, py);
-        ctx.stroke();
-      }
-    };
-
     const render = () => {
       ctx.clearRect(0, 0, width, height);
-      chips.forEach((c) => drawChip(c.x * width, c.y * height, c.w, c.h));
 
       nodes.forEach((node, idx) => {
         node.x += node.vx;
@@ -307,34 +321,25 @@ const HeroCircuit: React.FC = () => {
 };
 
 export const Dashboard: React.FC = () => {
-  const { telemetry, metrics } = useGatewayWebSocket();
-  const instances = metrics?.instances || {};
-  const [clock, setClock] = useState('');
-
-  useEffect(() => {
-    const tick = () => setClock(new Date().toTimeString().slice(0, 8));
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, []);
+  const { isConnected, events, metrics, instances } = useGatewayWebSocket();
 
   return (
     <div className="ng-root">
       <style>{STYLES}</style>
       <div className="ng-grid-overlay" />
 
+      {/* Hero Header */}
       <div className="ng-hero">
         <HeroCircuit />
         <div className="ng-hero-fade" />
 
         <div className="ng-hero-content">
-          <div className="ng-clock">
-            <span className="ng-clock-label">Local time</span>
-            <span className="ng-clock-value">{clock}</span>
+          <div className={`ng-status-badge ${isConnected ? 'online' : 'offline'}`}>
+            <span className="ng-dot"><span className="ng-dot-core" /></span>
+            <span>{isConnected ? 'Live WebSockets' : 'Disconnected'}</span>
           </div>
 
           <div className="ng-eyebrow">
-            <span className="ng-dot"><span className="ng-dot-core" /></span>
             <span className="ng-eyebrow-text">System operational</span>
           </div>
 
@@ -363,6 +368,38 @@ export const Dashboard: React.FC = () => {
       </div>
 
       <div className="ng-body">
+        {/* System Metric Summary Cards */}
+        <div className="ng-metrics-bar">
+          <div className="ng-metric-card">
+            <span className="ng-rivet" style={{ top: 8, left: 8 }} />
+            <span className="ng-rivet" style={{ top: 8, right: 8 }} />
+            <p className="ng-metric-title">Total Requests</p>
+            <p className="ng-metric-value">{metrics.totalRequests ?? 0}</p>
+          </div>
+
+          <div className="ng-metric-card">
+            <span className="ng-rivet" style={{ top: 8, left: 8 }} />
+            <span className="ng-rivet" style={{ top: 8, right: 8 }} />
+            <p className="ng-metric-title">Avg Latency</p>
+            <p className="ng-metric-value">{metrics.avgLatencyMs ?? 0} ms</p>
+          </div>
+
+          <div className="ng-metric-card">
+            <span className="ng-rivet" style={{ top: 8, left: 8 }} />
+            <span className="ng-rivet" style={{ top: 8, right: 8 }} />
+            <p className="ng-metric-title">Total Errors</p>
+            <p className="ng-metric-value error">{metrics.totalErrors ?? 0}</p>
+          </div>
+
+          <div className="ng-metric-card">
+            <span className="ng-rivet" style={{ top: 8, left: 8 }} />
+            <span className="ng-rivet" style={{ top: 8, right: 8 }} />
+            <p className="ng-metric-title">Uptime</p>
+            <p className="ng-metric-value">{metrics.upTimeSeconds ?? 0}s</p>
+          </div>
+        </div>
+
+        {/* Main Content Layout */}
         <div className="ng-layout">
           <div className="ng-col-side">
             <div className="ng-panel">
@@ -373,6 +410,7 @@ export const Dashboard: React.FC = () => {
               <ChaosControlPanel />
             </div>
 
+            {/* Granular Live Telemetry Feed */}
             <div className="ng-panel ng-panel-tight">
               <span className="ng-rivet" style={{ top: 10, left: 10 }} />
               <span className="ng-rivet" style={{ top: 10, right: 10 }} />
@@ -382,12 +420,43 @@ export const Dashboard: React.FC = () => {
                 <span className="ng-panel-title-dot" />
                 Live event stream
               </h3>
-              <div className="ng-log">
-                <pre>{telemetry ? JSON.stringify(telemetry, null, 2) : '// awaiting gateway telemetry packets...'}</pre>
+
+              <div className="ng-log-stream">
+                {events.length > 0 ? (
+                  events.map((evt: any, i: number) => {
+                    const meta = EVENT_STYLES[evt.eventType] || { color: '#8C8874', bg: '#1A1C12' };
+                    const time = new Date(evt.timestamp || Date.now()).toLocaleTimeString();
+                    const route = evt.payload?.route || evt.payload?.targetUrl || 'N/A';
+                    return (
+                      <div key={evt.eventId || i} className="ng-log-item">
+                        <div className="ng-log-header">
+                          <span className="ng-event-pill" style={{ color: meta.color, backgroundColor: meta.bg }}>
+                            {evt.eventType}
+                          </span>
+                          <span className="ng-log-time">[{time}]</span>
+                        </div>
+                        <div className="ng-log-body">
+                          {evt.payload?.method ? `${evt.payload.method} ` : ''}{route}
+                          {evt.payload?.latencyMs ? ` (${evt.payload.latencyMs}ms)` : ''}
+                        </div>
+                        {evt.payload && (
+                          <div className="ng-log-payload">
+                            {JSON.stringify(evt.payload)}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div style={{ color: '#6B6858', fontSize: 11, textAlign: 'center', marginTop: 120 }}>
+                    // awaiting gateway telemetry packets...
+                  </div>
+                )}
               </div>
             </div>
           </div>
 
+          {/* Upstream Instance Mesh */}
           <div className="ng-col-main">
             <div className="ng-section-head">
               <h2 className="ng-section-title">Upstream instance mesh</h2>
@@ -395,25 +464,19 @@ export const Dashboard: React.FC = () => {
             </div>
 
             <div className="ng-mesh-grid">
-              {Object.keys(instances).length > 0 ? (
-                Object.entries(instances).map(([targetUrl, data]: [string, any]) => (
-                  <div key={targetUrl} className="ng-mesh-card">
-                    <span className="ng-rivet" style={{ top: 10, left: 10 }} />
-                    <span className="ng-rivet" style={{ top: 10, right: 10 }} />
-                    <span className="ng-rivet" style={{ bottom: 10, left: 10 }} />
-                    <span className="ng-rivet" style={{ bottom: 10, right: 10 }} />
-                    <LiveInstanceCard
-                      targetUrl={targetUrl}
-                      status={data.status}
-                      activeConnections={data.activeConnections}
-                    />
-                  </div>
-                ))
-              ) : (
-                <div className="ng-empty">
-                  <p>Scanning network mesh — is the gateway online?</p>
+              {Object.entries(instances).map(([targetUrl, data]: [string, any]) => (
+                <div key={targetUrl} className="ng-mesh-card">
+                  <span className="ng-rivet" style={{ top: 10, left: 10 }} />
+                  <span className="ng-rivet" style={{ top: 10, right: 10 }} />
+                  <span className="ng-rivet" style={{ bottom: 10, left: 10 }} />
+                  <span className="ng-rivet" style={{ bottom: 10, right: 10 }} />
+                  <LiveInstanceCard
+                    targetUrl={targetUrl}
+                    status={data.status || 'UP'}
+                    activeConnections={data.activeConnections || 0}
+                  />
                 </div>
-              )}
+              ))}
             </div>
           </div>
         </div>
@@ -421,3 +484,5 @@ export const Dashboard: React.FC = () => {
     </div>
   );
 };
+
+export default Dashboard;
