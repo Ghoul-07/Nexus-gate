@@ -1,0 +1,49 @@
+services:
+  # 1. Upstream Microservices (Internal service - not exposed to public internet)
+  - type: pserv
+    name: nexus-backend-services
+    env: docker
+    dockerContext: .
+    dockerfilePath: ./backend-services/Dockerfile
+    plan: free
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+  # 2. API Gateway (Public Web Service)
+  - type: web
+    name: nexus-gateway
+    env: docker
+    dockerContext: .
+    dockerfilePath: ./gateway/Dockerfile
+    plan: free
+    envVars:
+      - key: PORT
+        value: 3000
+      - key: NODE_ENV
+        value: production
+      - key: USER1_TARGET
+        value: http://nexus-backend-services:4001
+      - key: USER2_TARGET
+        value: http://nexus-backend-services:4003
+      - key: ORDER_TARGET
+        value: http://nexus-backend-services:4002
+      - key: JWT_SECRET
+        sync: false
+      - key: REDIS_URL
+        sync: false
+
+  # 3. Pub/Sub Broker Relay (Public Web Service with WebSockets)
+  - type: web
+    name: nexus-pubsub
+    env: docker
+    dockerContext: .
+    dockerfilePath: ./pubsub/Dockerfile
+    plan: free
+    envVars:
+      - key: PORT
+        value: 5000
+      - key: NODE_ENV
+        value: production
+      - key: REDIS_URL
+        sync: false
