@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useGatewayWebSocket } from '../hooks/useGatewayWebSocket';
 import { LiveInstanceCard } from './LiveInstanceCard';
 import { ChaosControlPanel } from './ChaosControlPanel';
