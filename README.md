@@ -4,7 +4,7 @@
 
 Nexus-Gate sits at the edge of a microservice ecosystem, handling authentication, rate limiting, load balancing, and fault isolation — while streaming every gateway event in real time to a live operational dashboard.
 
-🔗 **Live Dashboard:** [http://52.66.7.92:5173](http://52.66.7.92:5173)
+🔗 **Live Dashboard:** [https://nexus-gate-dashboard.vercel.app/](https://nexus-gate-dashboard.vercel.app/)
 
 ---
 
