@@ -15,4 +15,4 @@ ENV NODE_PATH=/app/node_modules:/app/pubsub/node_modules
 WORKDIR /app/pubsub
 EXPOSE 5000
 
-CMD ["npm", "run", "dev"]
+CMD ["npm", "start"]

@@ -11,4 +11,4 @@ RUN npm ci --workspace=gateway --workspace=shared
 WORKDIR /app/gateway
 EXPOSE 3000
 
-CMD ["npm", "run", "dev"]
+CMD ["npm", "start"]

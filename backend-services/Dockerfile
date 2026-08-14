@@ -14,4 +14,4 @@ WORKDIR /app/backend-services
 EXPOSE 4001 4002 4003
 
 # Run user1, user2, and order services concurrently inside the container
-CMD ["npx", "concurrently", "\"npm run user1\"", "\"npm run user2\"", "\"npm run order\""]
+CMD ["npx", "concurrently", "npm run user1", "npm run user2", "npm run order"]

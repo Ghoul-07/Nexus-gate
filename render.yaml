@@ -1,6 +1,6 @@
 services:
   # 1. Upstream Microservices (Internal service - not exposed to public internet)
-  - type: pserv
+  - type: web
     name: nexus-backend-services
     env: docker
     dockerContext: .

@@ -4,9 +4,13 @@
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
-    "user1": "cross-env PORT=4001 tsx watch src/services/user-service.ts",
-    "user2": "cross-env PORT=4003 tsx watch src/services/user-service.ts",
-    "order": "cross-env PORT=4002 tsx watch src/services/order-service.ts"
+    "user1": "cross-env PORT=4001 tsx src/services/user-service.ts",
+    "user2": "cross-env PORT=4003 tsx src/services/user-service.ts",
+    "order": "cross-env PORT=4002 tsx src/services/order-service.ts",
+    "start": "npx concurrently \"cross-env PORT=4001 tsx src/services/user-service.ts\" \"cross-env PORT=4003 tsx src/services/user-service.ts\" \"cross-env PORT=4002 tsx src/services/order-service.ts\"",
+    "dev:user1": "cross-env PORT=4001 tsx watch src/services/user-service.ts",
+    "dev:user2": "cross-env PORT=4003 tsx watch src/services/user-service.ts",
+    "dev:order": "cross-env PORT=4002 tsx watch src/services/order-service.ts"
   },
   "dependencies": {
     "dotenv": "^17.4.2",
