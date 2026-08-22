@@ -46,7 +46,8 @@ class MetricsRegistery{
       requestsByStatus: this.requestsByStatus,
       requestsByRoute: this.requestsByRoute,
       requestsByMethod: this.requestsByMethod,
-      recentEvents: this.recentEvents
+      recentEvents: this.recentEvents,
+      startTime: this.startTime
     }
   }
 }

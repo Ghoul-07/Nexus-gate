@@ -12,6 +12,7 @@ export interface SystemMetrics {
   avgLatencyMs: number;
   totalErrors: number;
   upTimeSeconds: number;
+  startTime?: number;
 }
 
 export interface InstanceState {
@@ -34,6 +35,7 @@ export function useGatewayWebSocket() {
     avgLatencyMs: 0,
     totalErrors: 0,
     upTimeSeconds: 0,
+    startTime: Date.now()
   });
   const [instances, setInstances] = useState<Record<string, InstanceState>>(INITIAL_INSTANCES);
 
@@ -108,6 +110,19 @@ export function useGatewayWebSocket() {
 
     return () => ws.close();
   }, []);
+
+  useEffect(()=>{
+    const interval = setInterval(()=>{
+      setMetrics((prev) =>({
+        ...prev,
+        upTimeSeconds: prev.startTime ?
+          Math.floor((Date.now() - prev.startTime) / 1000)
+          : prev.upTimeSeconds + 1
+      }))
+    }, 1000)
+
+    return () => clearInterval(interval)
+  }, [])
 
   return { isConnected, events, metrics, instances };
 }

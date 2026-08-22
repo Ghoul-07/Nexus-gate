@@ -10,12 +10,18 @@ if (!REDIS_URL) {
   process.exit(1);
 }
 
+let latestMetricsSnapshot: any = null
+
 // 1. Initialize WebSocket Server for the React Dashboard
 const wss = new WebSocketServer({ port: PORT });
 
 wss.on('connection', (ws) => {
   console.log('[WebSocket] React Control Plane connected');
   ws.send(JSON.stringify({ status: 'connected', message: 'Nexus-Gate Telemetry Stream Active' }));
+
+  if(latestMetricsSnapshot){
+    ws.send(JSON.stringify(latestMetricsSnapshot))
+  }
 });
 
 // Broadcast helper function
@@ -52,7 +58,8 @@ const bootBroker = async () => {
   // 4. Subscribe to Gateway Metrics Updates
   await redisSubscriber.subscribe('gateway-metrics', (message) => {
     const metricsData = JSON.parse(message);
-    broadcastToDashboard({ type: 'METRICS_UPDATE', ...metricsData });
+    latestMetricsSnapshot = metricsData
+    broadcastToDashboard(metricsData);
   });
 
   console.log(`[Nexus-PubSub] WebSocket relay actively listening on ws://localhost:${PORT}`);

@@ -28,6 +28,16 @@ redisClient.on('connect', () => console.log('[Redis] Gateway Publisher connected
 // Connect asynchronously
 redisClient.connect().catch(console.error);
 
+// Background periodic snapshot (every 5 seconds) so idle state stays fresh
+setInterval(() => {
+  if (redisClient.isOpen) {
+    redisClient.publish(
+      'gateway-metrics',
+      JSON.stringify({ type: 'METRICS_UPDATE', data: metricsRegistry.getSnapshot() })
+    ).catch(() => {});
+  }
+}, 5000);
+
 function createBaseEvent(partitionKey: string) {
   return {
     eventId: uuidv4(),
