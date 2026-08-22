@@ -1,6 +1,6 @@
-import express, { raw } from 'express'
+import express from 'express'
 import type {Response, Request} from 'express'
-import { createProxyMiddleware } from 'http-proxy-middleware'
+
 import { ROUTES } from './config.js'
 import { telemetryMiddleware } from './middleware/telemetry.js'
 import { correlationMiddleware } from './middleware/correlationId.js'
@@ -10,6 +10,7 @@ import { getServicesHealth, startHealthCheckPoller } from './services/healthChec
 import { getNextTarget, trackRequestEnd, trackRequestStart } from './services/loadBalancer.js'
 import { metricsRegistry } from './services/metrics.js'
 import { getCircuitBreaker } from './services/circuitBreaker.js'
+import { forwardRequest } from './proxy/index.js'
 import http from 'http'
 import authRouter from './auth/authRoutes.js'
 import 'dotenv/config'
@@ -51,7 +52,7 @@ ROUTES.forEach((route) => {
     route.pathPrefix,
     authMiddleware(route),                   // Verify JWT and roles
     rateLimiterMiddleware(route),           // Enforce token rate limit
-    (req, res, next) =>{            
+    async(req:Request, res:Response) =>{            
       
       // pick healthy instance via Load Balancer
       const target = getNextTarget(route)
@@ -65,55 +66,31 @@ ROUTES.forEach((route) => {
       // increment active connections
       trackRequestStart(target)
 
-      ;(req as any).proxyTarget = target
-      next()
-  })
-  app.use(
-    route.pathPrefix,
-    createProxyMiddleware({
-      changeOrigin: true,
-      router: (req) => (req as any).proxyTarget,
-      on: {
-        // Record success when proxy receives upstream response
-        proxyRes: (proxyRes, req) =>{
-          const rawTarget = (req as any).proxyTarget        // e.g. "http://localhost:4001"
-          if(rawTarget){
-            
-            // decrement active request count upon response
-            trackRequestEnd(rawTarget)
+      const targetOrigin = new URL(target).origin
+      const breaker = getCircuitBreaker(targetOrigin)
 
-            const targetOrigin = new URL(rawTarget).origin;
-            const breaker = getCircuitBreaker(targetOrigin)
-            if(proxyRes.statusCode && proxyRes.statusCode >= 500){
-              breaker.recordFailure()
-            }
-            else{
-              breaker.recordSuccess()
-            }
-          }
-        },
-        // record failure on netwrok errors/ timeouts
-        error: (err, req, res) => {
-          const rawTarget = (req as any).proxyTarget             // e.g. "http://localhost:4001"
-          console.error(`[Proxy Error] ${req.url}:`, err.message)
-          if (rawTarget) {
-            
-            // decrement active request count upon error / timeouts
-            trackRequestEnd(rawTarget)
+      // forward request through our native stream proxy
 
-            const targetOrigin = new URL(rawTarget).origin;
-            const breaker = getCircuitBreaker(targetOrigin)
+      await forwardRequest(req, res, {
+        target,
+        timeoutMs: 10000,
+        onResponse: (statusCode) =>{
+          trackRequestEnd(target)
+          if(statusCode >= 500){
             breaker.recordFailure()
           }
-
-          if ('writeHead' in res) {
-            res.writeHead(502, { 'Content-Type': 'application/json' })
-            res.end(JSON.stringify({ error: 'Bad Gateway', message: 'Upstream service unavailable' }))
+          else{
+            breaker.recordSuccess()
           }
         },
-      },
-    })
-  );
+        onError: (err, statusCode) =>{
+          console.error(`[Proxy Error] ${req.url}: `, err.message)
+          trackRequestEnd(target)
+          breaker.recordFailure()
+        }
+      })
+      
+  })
 });
 
 const server = http.createServer(app)

@@ -6,6 +6,8 @@ import { getCircuitBreaker } from "./circuitBreaker.js";
 // map of origin -> active connections/request
 const activeConnections = new Map<string, number>()
 
+let rrIndex = 0
+
 export function trackRequestStart(targetUrl: string) : void{
   const origin = new URL(targetUrl).origin
   const current = activeConnections.get(origin) ?? 0
@@ -34,20 +36,24 @@ export function getNextTarget(route: RouteConfig): string | null {
     return null
   }
 
-  // Find the instance with the minimum number of active request
-  let selectedTarget = availableTargets[0]
-  let minConnections = activeConnections.get(new URL(selectedTarget).origin) ?? 0
+  // Find the minimum connection count among available targets
 
-  for(let i = 1; i < availableTargets.length; i++){
-    const target = availableTargets[i]
+  let minConnections = Infinity
+
+  for(const target of availableTargets){
     const origin = new URL(target).origin
-    const count = activeConnections.get(origin) ?? 0
-
-    if(count <  minConnections){
-      selectedTarget = target
+    const count = activeConnections.get(origin)?? 0
+    if(count < minConnections){
       minConnections = count
     }
   }
-  
-  return selectedTarget
+  // filter candidates that share this min count
+  const leastConnectedTargets = availableTargets.filter((target) =>{
+    const origin = new URL(target).origin
+    const count = activeConnections.get(origin) ?? 0
+    return count === minConnections
+  }) 
+  // round robin among tied candidates
+  const chosenIndex = (rrIndex++) % leastConnectedTargets.length
+  return leastConnectedTargets[chosenIndex]
 }
