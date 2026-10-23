@@ -14,6 +14,7 @@ orderApp.use(express.json())
 userApp.get('/health',(req:Request, res: Response) =>{
   res.json({status:'UP', service:'User Service'})
 })
+
 userApp.get('/users', (req:Request, res:Response)=>{
   res.json({
     service:'User Service',

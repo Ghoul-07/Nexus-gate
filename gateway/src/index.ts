@@ -1,6 +1,6 @@
 import express from 'express'
 import type {Response, Request} from 'express'
-
+import cors from 'cors'
 import { ROUTES } from './config.js'
 import { telemetryMiddleware } from './middleware/telemetry.js'
 import { correlationMiddleware } from './middleware/correlationId.js'
@@ -11,12 +11,22 @@ import { getNextTarget, trackRequestEnd, trackRequestStart } from './services/lo
 import { metricsRegistry } from './services/metrics.js'
 import { getCircuitBreaker } from './services/circuitBreaker.js'
 import { forwardRequest } from './proxy/index.js'
+import { getActiveChaos } from './services/chaosManager.js'
 import http from 'http'
 import authRouter from './auth/authRoutes.js'
 import 'dotenv/config'
 
 const app = express()
 const PORT = process.env.PORT || 3000
+const DASHBOARD_URL = process.env.DASHBOARD_URL || 'http://localhost:5173';
+
+app.use(cors({
+  origin:[DASHBOARD_URL, 'http://localhost:5173'],
+  credentials:true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-correlation-id']
+}))
+
 
 app.use(correlationMiddleware)
 app.use(telemetryMiddleware)
@@ -69,6 +79,25 @@ ROUTES.forEach((route) => {
       const targetOrigin = new URL(target).origin
       const breaker = getCircuitBreaker(targetOrigin)
 
+      // chaos control
+      const chaos = getActiveChaos()
+      const isTargeted = !chaos.targetOrigin || chaos.targetOrigin === targetOrigin
+
+
+      if (isTargeted && chaos.mode === 'SPIKE_500') {
+        trackRequestEnd(target)
+        breaker.recordFailure()
+        return res.status(500).json({
+          error: 'Chaos Engineering Injected Fault',
+          simulatedBy: 'Nexus-Gate Control Plane',
+          target
+        })
+      }
+
+      if (isTargeted && chaos.mode === 'LATENCY' && chaos.delayMs) {
+        await new Promise((resolve) => setTimeout(resolve, chaos.delayMs))
+      }
+
       // forward request through our native stream proxy
 
       await forwardRequest(req, res, {
@@ -88,8 +117,7 @@ ROUTES.forEach((route) => {
           trackRequestEnd(target)
           breaker.recordFailure()
         }
-      })
-      
+      })  
   })
 });
 

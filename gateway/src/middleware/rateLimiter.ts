@@ -21,7 +21,6 @@ export const rateLimiterMiddleware = (route: RouteConfig) => {
     const { capacity, refillPerSec } = route.rateLimit;
     const now = Date.now();
 
-
     //  Retrieve existing bucket or initialize a fresh full bucket
     let bucket = buckets.get(bucketKey);
 

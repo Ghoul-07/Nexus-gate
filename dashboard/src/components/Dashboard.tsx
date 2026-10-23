@@ -321,7 +321,7 @@ const HeroCircuit: React.FC = () => {
 };
 
 export const Dashboard: React.FC = () => {
-  const { isConnected, events, metrics, instances } = useGatewayWebSocket();
+  const { isConnected, events, metrics, instances , sendCommand} = useGatewayWebSocket();
 
   return (
     <div className="ng-root">
@@ -407,7 +407,7 @@ export const Dashboard: React.FC = () => {
               <span className="ng-rivet" style={{ top: 10, right: 10 }} />
               <span className="ng-rivet" style={{ bottom: 10, left: 10 }} />
               <span className="ng-rivet" style={{ bottom: 10, right: 10 }} />
-              <ChaosControlPanel />
+              <ChaosControlPanel sendCommand={sendCommand} isConnected={isConnected} />
             </div>
 
             {/* Granular Live Telemetry Feed */}

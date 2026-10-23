@@ -22,9 +22,9 @@ export function forwardRequest(req: Request, res:Response, options:ForwardOption
     const upstreamHeaders = buildUpstreamHeaders(req, targetUrl.host);
 
     // Clean up base path and append relative request subpath + query string
-    const targetBasePath = targetUrl.pathname.replace(/\/+$/, '');
-    const [subPath, queryString] = (req.url || '/').split('?');
-    const cleanSubPath = subPath.replace(/^\/+/, '');
+    const targetBasePath = targetUrl.pathname.replace(/\/+$/, '');      // eg. "/api/v1" or "" if root
+    const [subPath, queryString] = (req.url || '/').split('?');        // eg. "/users/123" and "sort=asc"
+    const cleanSubPath = subPath.replace(/^\/+/, '');           
 
     let outboundPath = targetBasePath;
     if (cleanSubPath) {
@@ -63,6 +63,7 @@ export function forwardRequest(req: Request, res:Response, options:ForwardOption
       }
 
       // stream upstream response body directly to client
+      // (readable).pipe(writable) is a Node.js stream method that efficiently transfers data from one stream to another without buffering the entire content in memory. This is particularly useful for proxying large responses, as it allows data to be sent to the client as it is received from the upstream server, reducing latency and memory usage.
       upstreamRes.pipe(res)
 
       upstreamRes.on('end', ()=>{

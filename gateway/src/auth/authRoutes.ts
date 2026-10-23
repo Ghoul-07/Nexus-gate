@@ -25,7 +25,6 @@ authRouter.post('/login', async(req: Request, res:Response) =>{
     return res.status(401).json({error:' Unauthorized', message:'Invalid Credentials'})
   }
 
-
   if(!JWT_SECRET){
     console.error("JWT_SECRET is not set")
     return res.status(500).json({error:'Internal server error'})

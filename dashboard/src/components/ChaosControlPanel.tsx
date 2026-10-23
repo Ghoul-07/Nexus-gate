@@ -1,6 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, memo } from 'react';
 
-const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL
+const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL || 'http://localhost:3000';
+const TOKEN_STORAGE_KEY = 'nexus_demo_token';
+
+const DEMO_CREDENTIALS = {
+  username: 'alice',
+  password: 'alice123',
+};
 
 const STYLES = `
 .ccp-title {
@@ -59,6 +65,12 @@ const STYLES = `
 
 type ToggleKey = 'normal' | 'spike' | 'latency';
 
+interface ChaosControlPanelProps {
+  sendCommand?: (type: string, payload?: any) => void;
+  authToken?: string;
+  isConnected?: boolean;
+}
+
 const Toggle: React.FC<{
   label: string;
   sub: string;
@@ -91,34 +103,124 @@ const Toggle: React.FC<{
   </button>
 );
 
-export const ChaosControlPanel: React.FC = () => {
+function getValidToken(): string | null {
+  const token = localStorage.getItem(TOKEN_STORAGE_KEY);
+  if (!token) return null;
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    if (payload.exp && Date.now() >= payload.exp * 1000) {
+      localStorage.removeItem(TOKEN_STORAGE_KEY);
+      return null;
+    }
+    return token;
+  } catch {
+    localStorage.removeItem(TOKEN_STORAGE_KEY);
+    return null;
+  }
+}
+
+const ChaosControlPanelComponent: React.FC<ChaosControlPanelProps> = ({
+  sendCommand,
+  authToken,
+  isConnected = true,
+}) => {
   const [activeToggle, setActiveToggle] = useState<ToggleKey | null>(null);
   const [isSpiking, setIsSpiking] = useState(false);
+  const [sessionToken, setSessionToken] = useState<string | null>(() => authToken || getValidToken());
+
+  useEffect(() => {
+    if (sessionToken) return;
+
+    let active = true;
+    async function loginDemoUser() {
+      try {
+        const res = await fetch(`${GATEWAY_URL}/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(DEMO_CREDENTIALS),
+        });
+
+        if (!res.ok) return;
+        const data = await res.json();
+        const token = data.token || data.accessToken;
+        if (token && active) {
+          localStorage.setItem(TOKEN_STORAGE_KEY, token);
+          setSessionToken(token);
+        }
+      } catch (err: any) {
+        console.error('Login error:', err.message);
+      }
+    }
+
+    loginDemoUser();
+    return () => {
+      active = false;
+    };
+  }, [sessionToken]);
 
   const flash = (key: ToggleKey, duration: number) => {
     setActiveToggle(key);
     setTimeout(() => setActiveToggle((cur) => (cur === key ? null : cur)), duration);
   };
 
-  const fireNormalTraffic = async () => {
-    flash('normal', 500);
-    for (let i = 0; i < 10; i++) {
-      fetch(`${GATEWAY_URL}/api/orders`).catch(() => {});
+  const getHeaders = (): Record<string, string> => {
+    const activeToken = authToken || sessionToken || localStorage.getItem(TOKEN_STORAGE_KEY);
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (activeToken) {
+      headers['Authorization'] = `Bearer ${activeToken}`;
     }
+    return headers;
+  };
+
+  const fireNormalTraffic = async () => {
+    flash('normal', 800);
+    const headers = getHeaders();
+    const requests = Array.from({ length: 10 }).map(() =>
+      fetch(`${GATEWAY_URL}/api/users`, { headers }).catch(() => {})
+    );
+    await Promise.allSettled(requests);
   };
 
   const triggerErrorSpike = async () => {
     setIsSpiking(true);
-    flash('spike', 1000);
-    for (let i = 0; i < 5; i++) {
-      fetch(`${GATEWAY_URL}/api/orders?chaos=500`).catch(() => {});
+    flash('spike', 2500);
+
+    if (sendCommand) {
+      sendCommand('CHAOS_TRIGGER', { mode: 'SPIKE_500' });
     }
-    setTimeout(() => setIsSpiking(false), 1000);
+
+    // Wait 250ms for Redis to deliver to Gateway
+    await new Promise((resolve) => setTimeout(resolve, 250));
+
+    const headers = getHeaders();
+    const requests = Array.from({ length: 5 }).map(() =>
+      fetch(`${GATEWAY_URL}/api/users`, { headers }).catch(() => {})
+    );
+    await Promise.allSettled(requests);
+
+    setTimeout(() => {
+      if (sendCommand) {
+        sendCommand('CHAOS_RESET');
+      }
+      setIsSpiking(false);
+    }, 2000);
   };
 
-  const triggerLatency = () => {
-    flash('latency', 1500);
-    fetch(`${GATEWAY_URL}/api/orders?delay=20000`).catch(() => {});
+  const triggerLatency = async () => {
+    flash('latency', 4000);
+    if (sendCommand) {
+      sendCommand('CHAOS_TRIGGER', { mode: 'LATENCY', delayMs: 4000 });
+    }
+
+    fetch(`${GATEWAY_URL}/api/users`, { headers: getHeaders() }).catch(() => {});
+
+    setTimeout(() => {
+      if (sendCommand) {
+        sendCommand('CHAOS_RESET');
+      }
+    }, 4500);
   };
 
   return (
@@ -130,7 +232,7 @@ export const ChaosControlPanel: React.FC = () => {
       <div className="ccp-stack">
         <Toggle
           label="Fire normal traffic"
-          sub="Sends 10 requests to /api/orders"
+          sub="Sends 10 requests to /api/users"
           active={activeToggle === 'normal'}
           color="#4ADE80"
           onClick={fireNormalTraffic}
@@ -140,17 +242,20 @@ export const ChaosControlPanel: React.FC = () => {
           sub="Forces 5 upstream failures"
           active={activeToggle === 'spike'}
           color="#F87171"
-          disabled={isSpiking}
+          disabled={isSpiking || !isConnected}
           onClick={triggerErrorSpike}
         />
         <Toggle
-          label="Inject 20s latency"
-          sub="Delays the next response by 20s"
+          label="Inject 4s latency"
+          sub="Delays the next response by 4s"
           active={activeToggle === 'latency'}
           color="#FBBF24"
+          disabled={!isConnected}
           onClick={triggerLatency}
         />
       </div>
     </div>
   );
 };
+
+export const ChaosControlPanel = memo(ChaosControlPanelComponent);
