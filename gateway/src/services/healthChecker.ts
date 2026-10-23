@@ -66,7 +66,6 @@ export function getServicesHealth(): Record<string, ServiceHealth>{
   return Object.fromEntries(healthStatusMap)
 }
 
-
 // Used by the load balancer to skip down instances
 
 export function isHealthy(target: string) : boolean{
